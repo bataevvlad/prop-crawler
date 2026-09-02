@@ -101,6 +101,7 @@ interface OtodomItem {
   title: string;
   slug: string;
   dateCreated?: string;
+  createdAtFirst?: string | null;
   pushedUpAt?: string | null;
   totalPrice?: { value: number; currency: string } | null;
   rentPrice?: { value: number; currency: string } | null;
@@ -154,7 +155,7 @@ export function parseOTODOM(html: string): Offer[] {
       date: formatDate(item.dateCreated),
       url: `https://www.otodom.pl/pl/oferta/${item.slug}`,
       image: item.images?.[0]?.large || item.images?.[0]?.medium || noImageUrl,
-      createdAt: warsawToIso(item.dateCreated),
+      createdAt: warsawToIso(item.createdAtFirst || item.dateCreated),
       refreshedAt: warsawToIso(item.pushedUpAt || item.dateCreated),
     };
   });

@@ -15,9 +15,13 @@ export const sendOnFirstRun = process.env.SEND_ON_FIRST_RUN === 'true';
 // Cron schedule for re-checking. Default: every minute.
 export const cronSchedule = process.env.CRON_SCHEDULE || '* * * * *';
 
-// Only notify about offers created or bumped within this many hours. Older ones
-// are remembered silently. 0 disables the check.
+// Only notify about offers created within this many hours. Older ones are
+// remembered silently. 0 disables the check.
 export const maxAgeHours = Number(process.env.MAX_AGE_HOURS || 24);
+
+// Owners can "refresh" (bump) an old listing back to the top. By default such
+// bumps do not count as fresh; set to "true" to treat a bump like a new offer.
+export const includeBumped = process.env.INCLUDE_BUMPED === 'true';
 
 // Pause between Telegram messages (ms) to stay under the ~20 msg/min group limit.
 export const sendDelayMs = Number(process.env.SEND_DELAY_MS || 3500);
