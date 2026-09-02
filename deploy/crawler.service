@@ -1,0 +1,17 @@
+[Unit]
+Description=OLX / Otodom rental offer notifier
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=crawler
+WorkingDirectory=/opt/prop-crawler
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=15
+StandardOutput=append:/opt/prop-crawler/launchd.log
+StandardError=append:/opt/prop-crawler/launchd.err
+
+[Install]
+WantedBy=multi-user.target

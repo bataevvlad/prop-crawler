@@ -99,6 +99,35 @@ systemd). Example launchd agent for macOS (`~/Library/LaunchAgents/crawler.plist
 
 Load it with `launchctl load ~/Library/LaunchAgents/crawler.plist`.
 
+## Running 24/7 for free on Google Cloud
+
+The Always Free tier includes one `e2-micro` VM (us-west1, us-central1 or
+us-east1 only). Plenty for this crawler.
+
+1. Install the gcloud CLI and log in:
+   ```
+   brew install --cask google-cloud-sdk
+   gcloud init
+   ```
+2. Create the VM (requires a project with billing enabled; the e2-micro itself
+   is not charged):
+   ```
+   gcloud compute instances create prop-crawler \
+     --zone=us-central1-a --machine-type=e2-micro \
+     --image-family=debian-12 --image-project=debian-cloud \
+     --boot-disk-size=30GB --boot-disk-type=pd-standard
+   ```
+3. SSH in and run the setup script:
+   ```
+   gcloud compute ssh prop-crawler --zone=us-central1-a
+   curl -fsSL https://raw.githubusercontent.com/bataevvlad/prop-crawler/master/deploy/setup-gcp.sh | bash
+   sudo nano /opt/prop-crawler/.env      # fill in URLs, token, chat id
+   sudo systemctl start crawler
+   journalctl -u crawler -f
+   ```
+
+The service (`deploy/crawler.service`) restarts on crash and on reboot.
+
 ## Troubleshooting
 
 - `OLX: __PRERENDERED_STATE__ not found` or `Otodom: __NEXT_DATA__ not found`:
