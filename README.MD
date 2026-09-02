@@ -47,7 +47,9 @@ Leave either URL empty to disable that source.
 1. Create a bot with @BotFather and copy its token into `TELEGRAM_BOT_TOKEN`.
 2. Create a channel or group and add the bot as administrator.
 3. Get the chat id (for example with @getidsbot or @userinfobot) and put it
-   into `TELEGRAM_CHAT_ID`. Channel ids look like `-100xxxxxxxxxx`.
+   into `TELEGRAM_CHAT_ID`. Channel ids look like `-100xxxxxxxxxx`. Several
+   recipients: comma separated, e.g. `123,456`. Each private recipient must
+   press Start on the bot first.
 
 If the token or chat id is missing the crawler still runs and prints new offers
 to the log instead of sending them.

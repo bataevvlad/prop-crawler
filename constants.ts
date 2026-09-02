@@ -5,7 +5,8 @@ import 'dotenv/config';
 export const urlOLX = process.env.URL_OLX || '';
 export const urlOTODOM = process.env.URL_OTODOM || '';
 export const bot_key = process.env.TELEGRAM_BOT_TOKEN || '';
-export const chatid = process.env.TELEGRAM_CHAT_ID || '';
+// One or more chat ids, comma separated (private chats, groups or channels).
+export const chatIds = (process.env.TELEGRAM_CHAT_ID || '').split(',').map((id) => id.trim()).filter(Boolean);
 
 // On the very first run (empty db) every listing is "new". By default we only
 // remember them and start notifying from the next check. Set to "true" to send

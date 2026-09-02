@@ -3,7 +3,7 @@ import { crawl } from './crawler';
 import { countDb, getFromDb, saveToDb } from './db';
 import { checkBot, sendMessage } from './telegram';
 import { log } from './logger';
-import { bot_key, chatid, cronSchedule, includeBumped, maxAgeHours, sendDelayMs, sendOnFirstRun, urlOLX, urlOTODOM } from './constants';
+import { bot_key, chatIds, cronSchedule, includeBumped, maxAgeHours, sendDelayMs, sendOnFirstRun, urlOLX, urlOTODOM } from './constants';
 import { Offer } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -19,7 +19,7 @@ function ageHours(offer: Offer): number {
 function isStale(offer: Offer): boolean {
   return maxAgeHours > 0 && ageHours(offer) > maxAgeHours;
 }
-const telegramEnabled = Boolean(bot_key && chatid);
+const telegramEnabled = Boolean(bot_key && chatIds.length > 0);
 
 async function research(notify: boolean): Promise<void> {
   if (running) {
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   }
   if (telegramEnabled) {
     const username = await checkBot();
-    log.info(`Telegram bot @${username} OK`);
+    log.info(`Telegram bot @${username} OK, sending to ${chatIds.length} chat(s)`);
   } else {
     log.warn('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set: running in log-only mode, new offers are printed here');
   }

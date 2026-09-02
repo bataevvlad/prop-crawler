@@ -1,4 +1,4 @@
-import { bot_key, chatid } from './constants';
+import { bot_key, chatIds } from './constants';
 import { Offer } from './types';
 import { log } from './logger';
 
@@ -44,19 +44,29 @@ export function formatMessage(offer: Offer): string {
 }
 
 export async function sendMessage(offer: Offer): Promise<void> {
-  if (!bot_key || !chatid) {
+  if (!bot_key || chatIds.length === 0) {
     throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not configured');
   }
-  log.debug(`Sending offer ${offer.id} to chat`);
   const caption = formatMessage(offer);
+  const failures: string[] = [];
 
-  try {
-    // Telegram downloads the photo itself; no need to store it locally.
-    await call('sendPhoto', { chat_id: chatid, photo: offer.image, caption, parse_mode: 'HTML' });
-  } catch (error) {
-    // Photo URL rejected (too large, wrong type, expired) - fall back to text.
-    log.warn(`sendPhoto failed for ${offer.id}, falling back to text: ${error}`);
-    await call('sendMessage', { chat_id: chatid, text: caption, parse_mode: 'HTML' });
+  for (const chatId of chatIds) {
+    log.debug(`Sending offer ${offer.id} to chat ${chatId}`);
+    try {
+      try {
+        // Telegram downloads the photo itself; no need to store it locally.
+        await call('sendPhoto', { chat_id: chatId, photo: offer.image, caption, parse_mode: 'HTML' });
+      } catch (error) {
+        // Photo URL rejected (too large, wrong type, expired) - fall back to text.
+        log.warn(`sendPhoto failed for ${offer.id} in ${chatId}, falling back to text: ${error}`);
+        await call('sendMessage', { chat_id: chatId, text: caption, parse_mode: 'HTML' });
+      }
+    } catch (error) {
+      failures.push(`${chatId}: ${error}`);
+    }
+  }
+  if (failures.length) {
+    throw new Error(`Failed for ${failures.length}/${chatIds.length} chats: ${failures.join('; ')}`);
   }
 }
 
