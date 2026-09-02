@@ -3,11 +3,22 @@ import { crawl } from './crawler';
 import { countDb, getFromDb, saveToDb } from './db';
 import { checkBot, sendMessage } from './telegram';
 import { log } from './logger';
-import { bot_key, chatid, cronSchedule, sendDelayMs, sendOnFirstRun, urlOLX, urlOTODOM } from './constants';
+import { bot_key, chatid, cronSchedule, maxAgeHours, sendDelayMs, sendOnFirstRun, urlOLX, urlOTODOM } from './constants';
+import { Offer } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 let running = false;
+
+function ageHours(offer: Offer): number {
+  const stamp = new Date(offer.refreshedAt || offer.createdAt).getTime();
+  if (Number.isNaN(stamp)) return 0; // unknown age: treat as fresh
+  return (Date.now() - stamp) / 3_600_000;
+}
+
+function isStale(offer: Offer): boolean {
+  return maxAgeHours > 0 && ageHours(offer) > maxAgeHours;
+}
 const telegramEnabled = Boolean(bot_key && chatid);
 
 async function research(notify: boolean): Promise<void> {
@@ -25,6 +36,10 @@ async function research(notify: boolean): Promise<void> {
       fresh += 1;
       await saveToDb(offer);
       if (!notify) continue;
+      if (isStale(offer)) {
+        log.debug(`Skipping stale ${offer.id} (${ageHours(offer).toFixed(0)}h old): ${offer.title}`);
+        continue;
+      }
       if (!telegramEnabled) {
         log.info(`NEW ${offer.id}: ${offer.title} | ${offer.price} | ${offer.url}`);
         continue;

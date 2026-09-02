@@ -81,6 +81,8 @@ export function parseOLX(html: string): Offer[] {
       date: formatDate(ad.createdTime),
       url: ad.url,
       image,
+      createdAt: ad.createdTime || '',
+      refreshedAt: ad.lastRefreshTime || ad.createdTime || '',
     };
   });
 }
@@ -99,6 +101,7 @@ interface OtodomItem {
   title: string;
   slug: string;
   dateCreated?: string;
+  pushedUpAt?: string | null;
   totalPrice?: { value: number; currency: string } | null;
   rentPrice?: { value: number; currency: string } | null;
   areaInSquareMeters?: number | null;
@@ -151,6 +154,8 @@ export function parseOTODOM(html: string): Offer[] {
       date: formatDate(item.dateCreated),
       url: `https://www.otodom.pl/pl/oferta/${item.slug}`,
       image: item.images?.[0]?.large || item.images?.[0]?.medium || noImageUrl,
+      createdAt: warsawToIso(item.dateCreated),
+      refreshedAt: warsawToIso(item.pushedUpAt || item.dateCreated),
     };
   });
 }
@@ -164,11 +169,26 @@ async function crawlOTODOM(url: string): Promise<Offer[]> {
 // helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(value?: string): string {
+// Otodom timestamps look like "2026-09-02 17:22:34" with no zone; they are
+// Warsaw local time. Convert to ISO with the correct offset so the age check
+// works regardless of the server's timezone.
+export function warsawToIso(value?: string | null): string {
   if (!value) return '';
-  const date = new Date(value.replace(' ', 'T'));
+  if (/[zZ]|[+-]\d\d:\d\d$/.test(value)) return value;
+  const naive = new Date(value.replace(' ', 'T') + 'Z');
+  if (Number.isNaN(naive.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Warsaw', timeZoneName: 'longOffset',
+  }).formatToParts(naive);
+  const offset = parts.find((p) => p.type === 'timeZoneName')?.value.replace('GMT', '') || '+00:00';
+  return value.replace(' ', 'T') + (offset || '+00:00');
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(warsawToIso(value));
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' });
+  return date.toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Warsaw' });
 }
 
 function formatMoney(value: number, currency: string): string {

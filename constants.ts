@@ -15,6 +15,10 @@ export const sendOnFirstRun = process.env.SEND_ON_FIRST_RUN === 'true';
 // Cron schedule for re-checking. Default: every minute.
 export const cronSchedule = process.env.CRON_SCHEDULE || '* * * * *';
 
+// Only notify about offers created or bumped within this many hours. Older ones
+// are remembered silently. 0 disables the check.
+export const maxAgeHours = Number(process.env.MAX_AGE_HOURS || 24);
+
 // Pause between Telegram messages (ms) to stay under the ~20 msg/min group limit.
 export const sendDelayMs = Number(process.env.SEND_DELAY_MS || 3500);
 
