@@ -1,5 +1,8 @@
+export type Source = 'olx' | 'otodom';
+
 export interface Offer {
   id: string;
+  source: Source;
   title: string;
   price: string;
   location: string;
@@ -7,4 +10,3 @@ export interface Offer {
   url: string;
   image: string;
 }
-

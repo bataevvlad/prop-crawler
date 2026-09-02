@@ -130,7 +130,10 @@ dist
 .pnp.*
 db/
 .idea/
+.DS_Store
 crawler.log
+launchd.log
+launchd.err
 
 *.js
 *.log

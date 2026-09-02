@@ -1,36 +1,67 @@
-import { log } from './logger';
-
-process.env.NTBA_FIX_319 = '1';
-process.env.NTBA_FIX_350 = '1';
-import * as fs from 'fs';
-import fetch from 'node-fetch';
-import TelegramBot from 'node-telegram-bot-api';
 import { bot_key, chatid } from './constants';
 import { Offer } from './types';
+import { log } from './logger';
 
+const API = `https://api.telegram.org/bot${bot_key}`;
 
-const bot = new TelegramBot(bot_key, { polling: false });
-
-
-export async function sendMessage(offer: Offer) {
-  const path = `db/${ offer.id }.webp`
-  await download(offer.image, path);
-
-  log.debug(`Sending offer ${offer.id} to chat`);
-
-  const { title, price, location, date, url } = offer;
-
-  const message = `<a href="${url}">${title}</a>\n\n${ price }\n${ location }, ${ date }`;
-
-  await bot.sendPhoto(chatid, path, { caption: message, parse_mode: 'HTML' });
-
-
+interface TelegramResponse {
+  ok: boolean;
+  description?: string;
+  parameters?: { retry_after?: number };
 }
 
-async function download(url: string, path: string) {
-  return new Promise<void>((async resolve => {
-    const response = await fetch(url);
-    const buffer = await response.buffer();
-    fs.writeFile(path, buffer, () => resolve());
-  }))
+async function call(method: string, body: Record<string, unknown>): Promise<TelegramResponse> {
+  const response = await fetch(`${API}/${method}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = (await response.json()) as TelegramResponse;
+  if (json.ok) return json;
+
+  if (response.status === 429 && json.parameters?.retry_after) {
+    const wait = json.parameters.retry_after;
+    log.warn(`Telegram rate limit, retrying in ${wait}s`);
+    await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+    return call(method, body);
+  }
+  throw new Error(`Telegram ${method} failed: ${response.status} ${json.description || ''}`);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function formatMessage(offer: Offer): string {
+  const { title, price, location, date, url, source } = offer;
+  const tag = source === 'olx' ? '#olx' : '#otodom';
+  const meta = [location, date].filter(Boolean).join(', ');
+  return `<a href="${url}">${escapeHtml(title)}</a>\n\n<b>${escapeHtml(price)}</b>\n${escapeHtml(meta)}\n${tag}`;
+}
+
+export async function sendMessage(offer: Offer): Promise<void> {
+  if (!bot_key || !chatid) {
+    throw new Error('TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not configured');
+  }
+  log.debug(`Sending offer ${offer.id} to chat`);
+  const caption = formatMessage(offer);
+
+  try {
+    // Telegram downloads the photo itself; no need to store it locally.
+    await call('sendPhoto', { chat_id: chatid, photo: offer.image, caption, parse_mode: 'HTML' });
+  } catch (error) {
+    // Photo URL rejected (too large, wrong type, expired) - fall back to text.
+    log.warn(`sendPhoto failed for ${offer.id}, falling back to text: ${error}`);
+    await call('sendMessage', { chat_id: chatid, text: caption, parse_mode: 'HTML' });
+  }
+}
+
+/** Verifies the bot token; returns the bot username. */
+export async function checkBot(): Promise<string> {
+  const json = (await call('getMe', {})) as TelegramResponse & { result?: { username?: string } };
+  return json.result?.username || 'unknown';
 }

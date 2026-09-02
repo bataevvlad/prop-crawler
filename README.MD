@@ -1,105 +1,111 @@
-# Property rent apartment finder in Poland.
+# Property rent apartment finder in Poland
 
-This is a simple notifier of the new offers on olx.pl and otodom.pl.
-While running, it will check for new offers every minute, and it finds a new one it will send a notification in telegram.
+Notifier for new rental offers on olx.pl and otodom.pl. While running, it
+re-checks the search pages every minute and posts each new offer to a Telegram
+chat or channel (photo + title, price, location, date, link).
 
-## How to use this gorgeous peace of code:
+## How it works
 
-### Setup environment:
+Both sites are server-rendered React apps and embed the listing data as JSON
+for hydration. The crawler reads that JSON instead of scraping the markup:
 
-1. Make sure you have node.js and npm installed.
-2. Clone the repository.
-3. Run `npm install` in the root directory.
+- OLX: `window.__PRERENDERED_STATE__` -> `listing.listing.ads`
+- Otodom: `<script id="__NEXT_DATA__">` -> `props.pageProps.data.searchAds.items`
 
-### Setup searching urls:
-For olx.pl:
+Seen offers are stored as `db/<source>-<id>.json`. Only offers not yet in `db/`
+are sent.
 
-1. Open https://www.olx.pl/d/nieruchomosci/mieszkania/
-2. Choose city,and set up the filters according to your needs.
-3. Copy the url of the page you want to search.
-4. Paste it in the `contstants.ts` as a value for variable `urlOLX`.
+## Setup
 
-For example:
+Requirements: Node.js 20 or newer.
 
 ```
-const urlOLX = 'https://www.olx.pl/nieruchomosci/mieszkania/wynajem/gdansk/?search%5Bfilter_float_price%3Ato%5D=4000&search%5Bfilter_float_price%3Afrom%5D=1400&search%5Bfilter_enum_rooms%5D%5B0%5D=two&search%5Bfilter_enum_rooms%5D%5B1%5D=three&search%5Bfilter_enum_rooms%5D%5B2%5D=four&search%5Bdist%5D=5';'
+npm install
+cp .env.example .env
 ```
 
-For otodom.pl:
+Then edit `.env`:
 
-1. Open https://www.otodom.pl/pl/oferty/wynajem/mieszkanie
-2. Choose city,and set up the filters according to your needs.
-3. Copy the url of the page you want to search.
-4. Paste it in the `contstants.ts` as a value for variable `urlOTODOM`.
+### Search URLs
 
-For example:
+For OLX:
 
-```
-const urlOTODOM = 'https://www.otodom.pl/pl/oferty/wynajem/mieszkanie/gdansk?distanceRadius=0&page=1&limit=36&market=ALL&ownerTypeSingleSelect=ALL&roomsNumber=%5BTWO%2CTHREE%2CFOUR%5D&isPrivateOwner=true&priceMin=1400&priceMax=4500&daysSinceCreated=3&locations=%5Bcities_6-40%5D&media=%5B%5D&extras=%5B%5D&viewType=listing';
-```
+1. Open https://www.olx.pl/nieruchomosci/mieszkania/wynajem/
+2. Choose city and filters.
+3. Copy the URL from the address bar into `URL_OLX`.
 
-### Setup telegram bot:
+For Otodom:
 
-1. You can create a bot on telegram using the @BotFather bot. It's pretty easy. 
-2. Gwt the token of the bot you created by sending a message `/token` to the @BotFather. 
-3. Copy the token from the bot and paste it in the `contstants.ts` as a value for variable `bot_key`.
+1. Open https://www.otodom.pl/pl/wyniki/wynajem/mieszkanie/
+2. Choose city and filters.
+3. Copy the URL from the address bar into `URL_OTODOM`.
 
-### Setup telegram channel:
+Leave either URL empty to disable that source.
 
-1. Create a channel on telegram.
-2. Invite the created bot to the channel as administrator.
-3. Find @getidsbot and using it get the id of the channel you created.
-4. Copy the id of the channel you created and paste it in the `contstants.ts` as a value for variable `chatid`.
+### Telegram bot
 
+1. Create a bot with @BotFather and copy its token into `TELEGRAM_BOT_TOKEN`.
+2. Create a channel or group and add the bot as administrator.
+3. Get the chat id (for example with @getidsbot or @userinfobot) and put it
+   into `TELEGRAM_CHAT_ID`. Channel ids look like `-100xxxxxxxxxx`.
 
-### Running the code:
+If the token or chat id is missing the crawler still runs and prints new offers
+to the log instead of sending them.
 
-1. Run `npm start` in the root directory.
-2. You also can watch the logs in the terminal by using command `tail -f crawler.log`.
-3. Do not close the terminal, or the script will stop.
+### Optional settings
 
-### Advanced usage:
-On OSX you can set up a daemon to automatically run the script as your laptop is turned on.
-Steps:
+| Variable            | Default       | Meaning                                                    |
+| ------------------- | ------------- | ---------------------------------------------------------- |
+| `SEND_ON_FIRST_RUN` | `false`       | On an empty `db/` every listing is new. By default the first run only remembers them. |
+| `CRON_SCHEDULE`     | `* * * * *`   | How often to re-check (cron syntax).                       |
+| `SEND_DELAY_MS`     | `3500`        | Pause between Telegram messages (group limit ~20/min).     |
 
-1. Create a file named `crawler.plist` in `/Library/LaunchDaemons/` directory:
-```
-sudo touch /Library/LaunchDaemons/crawler.plist
-```
-
-2. Add the following content to the file and save it:
+## Running
 
 ```
+npm run crawl   # dry run: fetch both sources and print parsed offers, nothing sent
+npm start       # run the notifier
+tail -f crawler.log
+```
+
+Keep the terminal open, or run it under a process manager (pm2, launchd,
+systemd). Example launchd agent for macOS (`~/Library/LaunchAgents/crawler.plist`):
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Crawler</key>
-    <string>crawler.application</string>
-
+    <key>Label</key>
+    <string>crawler</string>
     <key>WorkingDirectory</key>
-    <string>/Users/alexei/dev/crawler</string>
-
+    <string>/path/to/prop-crawler</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/node</string>
-        <string>PATH_TO_THE_ROOT_FOLDER/index.js</string>
+        <string>/usr/local/bin/npm</string>
+        <string>start</string>
     </array>
-
     <key>RunAtLoad</key>
     <true/>
-
     <key>KeepAlive</key>
     <true/>
-
+    <key>StandardOutPath</key>
+    <string>/path/to/prop-crawler/launchd.log</string>
+    <key>StandardErrorPath</key>
+    <string>/path/to/prop-crawler/launchd.err</string>
 </dict>
 </plist>
 ```
 
-3. Run `sudo launchctl load /Library/LaunchDaemons/crawler.plist` to start the daemon.
-4. Run `sudo launchctl list` to check if the daemon is running.
-5. Run `sudo launchctl unload /Library/LaunchDaemons/crawler.plist` to stop the daemon. It will be restarted automatically on next boot.
-6. If you want to completely remove the daemon, run `sudo launchctl remove /Library/LaunchDaemons/crawler.plist` or `sudo rm /Library/LaunchDaemons/crawler.plist`.
+Load it with `launchctl load ~/Library/LaunchAgents/crawler.plist`.
 
+## Troubleshooting
 
-# Disclaimer:
-This script worked for me in the March 2022, but later the markup of olx.pl and otodom.pl could change and the script could stop working.
-Use it at your own risk, can't be held responsible for any damage caused by this script. 💁‍♂️
+- `OLX: __PRERENDERED_STATE__ not found` or `Otodom: __NEXT_DATA__ not found`:
+  the site changed its page structure or served a bot-check page. Run
+  `npm run crawl` and inspect.
+- `HTTP 403` from OLX: the request was blocked by CloudFront. Node's built-in
+  fetch works; plain curl does not. Try again in a few minutes.
+- `Telegram getMe failed: 401`: wrong bot token.
+- `Telegram sendPhoto failed: 400 ... chat not found`: wrong chat id, or the bot
+  is not a member/admin of the chat.
