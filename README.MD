@@ -68,36 +68,29 @@ npm start       # run the notifier
 tail -f crawler.log
 ```
 
-Keep the terminal open, or run it under a process manager (pm2, launchd,
-systemd). Example launchd agent for macOS (`~/Library/LaunchAgents/crawler.plist`):
+Keep the terminal open, or run it under a process manager.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>crawler</string>
-    <key>WorkingDirectory</key>
-    <string>/path/to/prop-crawler</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/local/bin/npm</string>
-        <string>start</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/path/to/prop-crawler/launchd.log</string>
-    <key>StandardErrorPath</key>
-    <string>/path/to/prop-crawler/launchd.err</string>
-</dict>
-</plist>
+### macOS: run permanently with launchd
+
+`deploy/com.propcrawler.plist` starts the crawler at login, restarts it on
+crash, and wraps it in `caffeinate -i` so the Mac does not idle-sleep while it
+runs. Closing the lid still sleeps the machine, so keep it open and plugged in
+(or disable lid sleep with a tool like Amphetamine).
+
+```
+sed -e "s#/path/to/prop-crawler#$PWD#g" -e "s#/path/to/node/bin#$(dirname $(which node))#g" \
+  deploy/com.propcrawler.plist > ~/Library/LaunchAgents/com.propcrawler.plist
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.propcrawler.plist
 ```
 
-Load it with `launchctl load ~/Library/LaunchAgents/crawler.plist`.
+Manage it:
+
+```
+launchctl print gui/$UID/com.propcrawler | grep state   # status
+tail -f launchd.log                                       # logs
+launchctl kickstart -k gui/$UID/com.propcrawler          # restart (after editing .env)
+launchctl bootout gui/$UID/com.propcrawler               # stop and uninstall
+```
 
 ## Running 24/7 for free on Google Cloud
 
