@@ -54,7 +54,7 @@ interface OlxAd {
   createdTime?: string;
   lastRefreshTime?: string;
   price?: { displayValue?: string };
-  location?: { pathName?: string; cityName?: string; districtName?: string };
+  location?: { pathName?: string; cityName?: string; districtName?: string; regionId?: number };
   photos?: string[];
 }
 
@@ -65,7 +65,23 @@ export function parseOLX(html: string): Offer[] {
   }
   // The state is a JSON string literal containing JSON.
   const state = JSON.parse(JSON.parse(match[1]));
-  const ads: OlxAd[] = state?.listing?.listing?.ads ?? [];
+  const listing = state?.listing?.listing;
+  const allAds: OlxAd[] = listing?.ads ?? [];
+
+  // OLX's search backend occasionally ignores the location filter and returns
+  // a nationwide listing while `metaData.location` still names the searched
+  // city. Keep only ads from the region the page says it was searched in.
+  const expectedRegionId: number | undefined = listing?.metaData?.location?.regionId;
+  const ads = expectedRegionId
+    ? allAds.filter((ad) => ad.location?.regionId === expectedRegionId)
+    : allAds;
+  const dropped = allAds.length - ads.length;
+  if (dropped > 0) {
+    log.warn(`OLX: dropped ${dropped}/${allAds.length} ads outside region ${expectedRegionId} (location filter ignored by OLX?)`);
+  }
+  if (allAds.length > 0 && dropped > allAds.length / 2) {
+    throw new Error(`OLX: ${dropped}/${allAds.length} ads outside searched region, discarding response`);
+  }
 
   return ads.map((ad) => {
     const image = ad.photos?.[0]
@@ -113,6 +129,7 @@ interface OtodomItem {
     address?: {
       street?: { name?: string } | null;
       city?: { name?: string } | null;
+      province?: { name?: string } | null;
     } | null;
     reverseGeocoding?: {
       locations?: { name: string; locationLevel: string }[];
@@ -126,7 +143,37 @@ export function parseOTODOM(html: string): Offer[] {
     throw new Error('Otodom: __NEXT_DATA__ not found in page');
   }
   const data = JSON.parse(match[1]);
-  const items: OtodomItem[] = data?.props?.pageProps?.data?.searchAds?.items ?? [];
+  const searchAds = data?.props?.pageProps?.data?.searchAds;
+  const allItems: OtodomItem[] = searchAds?.items ?? [];
+
+  // Same guard as for OLX: only keep items in the voivodeship(s) the page was
+  // searched in. `locationsObjects` describes the searched locations; the
+  // voivodeship is either the object itself or one of its parents.
+  const searched: { id?: string; detailedLevel?: string; parents?: { id?: string; detailedLevel?: string }[] }[] =
+    searchAds?.locationsObjects ?? [];
+  const expectedProvinces = new Set<string>();
+  for (const loc of searched) {
+    for (const candidate of [loc, ...(loc.parents ?? [])]) {
+      if (candidate.detailedLevel === 'voivodeship' && candidate.id) expectedProvinces.add(candidate.id.toLowerCase());
+    }
+  }
+  const provinceOf = (item: OtodomItem): string | undefined => (
+    item.location?.address?.province?.name
+      || item.location?.reverseGeocoding?.locations?.find((l) => l.locationLevel === 'voivodeship')?.name
+  )?.toLowerCase();
+  const items = expectedProvinces.size > 0
+    ? allItems.filter((item) => {
+      const province = provinceOf(item);
+      return !province || expectedProvinces.has(province);
+    })
+    : allItems;
+  const dropped = allItems.length - items.length;
+  if (dropped > 0) {
+    log.warn(`Otodom: dropped ${dropped}/${allItems.length} items outside ${[...expectedProvinces].join(',')}`);
+  }
+  if (allItems.length > 0 && dropped > allItems.length / 2) {
+    throw new Error(`Otodom: ${dropped}/${allItems.length} items outside searched region, discarding response`);
+  }
 
   return items.map((item) => {
     const price = item.hidePrice || !item.totalPrice
